@@ -1,0 +1,110 @@
+#pragma kernel main
+
+RWTexture2D<float4> result;
+
+uniform int screenWidth;
+uniform int screenHeight;
+
+uniform float2 triA, triB, triC;
+uniform int iterations;
+uniform int samples;
+uniform float time;
+
+
+float cross2d(float2 a, float2 b)
+{
+    return a.x * b.y - a.y * b.x;
+}
+
+
+bool isInsideTriangle(float2 p, float2 a, float2 b, float2 c)
+{
+    float2 maxV = max(max(a,b),c);
+    float2 minV = min(min(a,b),c);
+
+    if(p.x < minV.x) return false;
+    if(p.x > maxV.x) return false;
+    if(p.y < minV.y) return false;
+    if(p.y > maxV.y) return false;
+
+    bool aS = cross2d(p - a, b - a) > 0;
+    bool bS = cross2d(p - b, c - b) > 0;
+    bool cS = cross2d(p - c, a - c) > 0;
+
+    // Obustronnie
+    bool aN = aS && bS && cS;
+    bool aP = !aS && !bS && !cS;
+
+    return aN || aP;
+}
+
+
+bool isInsideSierpinskiTriangle(float2 positionUv)
+{
+    float2 a = triA;
+    float2 b = triB;
+    float2 c = triC;
+
+    bool isPointInside = isInsideTriangle(positionUv, a, b, c);
+    
+    for (int i = 0; i < iterations && isPointInside; ++i)
+    {
+        float2 ab = (a + b) / 2;
+        float2 bc = (b + c) / 2;
+        float2 ca = (c + a) / 2;
+        
+        bool inSub1 = isInsideTriangle(positionUv, a, ab, ca);
+        bool inSub2 = isInsideTriangle(positionUv, b, ab, bc);
+        bool inSub3 = isInsideTriangle(positionUv, c, bc, ca);
+
+        if(inSub1)
+        {
+            b = ab;
+            c = ca;
+        }
+        else if(inSub2)
+        {
+            a = ab;
+            c = bc;
+        }
+        else if(inSub3)
+        {
+            b = bc;
+            a = ca;
+        }
+        else
+        {
+            isPointInside = false;
+        }
+    }
+
+    return isPointInside;
+}
+
+
+[numthreads(8,8,1)]
+void main (const uint3 id : SV_DispatchThreadID)
+{
+    const float2 screenDimensionsPx = float2(screenWidth, screenHeight);
+    float aaFactor = 0.0;
+    
+    const int trueSamples = samples;
+    const float subPixelDistance = 1 / (float) trueSamples;
+    const float subPixelQuadWeight = subPixelDistance * subPixelDistance;
+    
+    for (int xSample = 0; xSample < trueSamples; ++xSample)
+    {
+        for (int ySample = 0; ySample < trueSamples; ++ySample)
+        {
+            const float2 sample = float2(xSample, ySample);
+            const float2 positionSubPx = (float2) id.xy + sample * subPixelDistance;
+            const float2 positionUv = positionSubPx / screenDimensionsPx;
+
+            if(isInsideSierpinskiTriangle(positionUv))
+                aaFactor += subPixelQuadWeight;
+        }
+    }
+    
+    float3 color = lerp(float3(0,0,0), float3(1,1,1), aaFactor);
+    result[id.xy] = float4(color, 1.0);
+}

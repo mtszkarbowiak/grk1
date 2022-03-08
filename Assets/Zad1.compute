@@ -1,0 +1,41 @@
+#pragma kernel main
+
+RWTexture2D<float4> result;
+
+uniform int screenWidth;
+uniform int screenHeight;
+
+uniform float2 triA, triB, triC;
+uniform int iterations;
+uniform float time;
+uniform int samples;
+
+float distance2(float2 a, float2 b)
+{
+    float2 manhattanDistance = abs(a - b);
+    float x2d = manhattanDistance.x * manhattanDistance.x;
+    float y2d = manhattanDistance.y * manhattanDistance.y;
+    float result = sqrt(x2d + y2d);
+    
+    return result;
+}
+
+[numthreads(8,8,1)]
+void main (const uint3 id : SV_DispatchThreadID)
+{
+    float2 screenDimensionsPx = float2(screenWidth, screenHeight);
+    float2 positionPx = (float2) id.xy;
+    float2 positionUV = positionPx / screenDimensionsPx;
+
+    float backgroundBlue = (positionUV.x + (1 - positionUV.y)) / 2;
+    float3 backgroundColor = float3(0.0, 1.0, backgroundBlue);
+
+    float2 screenCenterPx = screenDimensionsPx / 2;
+    float centerDistPx = distance2(screenCenterPx, positionPx);
+
+    const float radiusPx = 256.0;
+    float t = clamp(1 - centerDistPx / radiusPx, 0.0, 1.0);
+    float3 color = lerp(backgroundColor, float3(1.0,0.0,0.0), t);
+    
+    result[id.xy] = float4(color, 1.0);
+}

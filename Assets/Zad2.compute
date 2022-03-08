@@ -1,0 +1,53 @@
+#pragma kernel main
+
+RWTexture2D<float4> result;
+
+uniform int screenWidth;
+uniform int screenHeight;
+
+uniform float2 triA, triB, triC;
+uniform int iterations;
+uniform float time;
+uniform int samples;
+
+[numthreads(8,8,1)]
+void main (const uint3 id : SV_DispatchThreadID)
+{
+    const float3 skyColor = float3(200,200,255) / 256.0;
+    const float3 roofColor = float3(255,100,100) / 256.0;
+    const float3 wallColor = float3(100,50,30) / 256.0;
+    const float3 grassColor = float3(0,100,0) / 256.0;
+
+    const float grassHeightUv = 0.3;
+    const float wallWidthUv = 0.5;
+    const float wallHeightUv = grassHeightUv + 0.3;
+    const float roofSlopeUv = 1.5;
+    const float roofWidthUv = 0.8;
+
+    float2 screenDimensionsPx = float2(screenWidth, screenHeight);
+    float2 positionPx = (float2) id.xy;
+    float2 positionUV = positionPx / screenDimensionsPx;
+
+    float3 color = skyColor;
+
+    float distFromYAxisUv = abs(0.5 - positionUV.x);
+
+    if(positionUV.y <= grassHeightUv) // Trawa
+    {
+        color = grassColor;
+    }
+    else if( // Ściany
+        distFromYAxisUv <= (wallWidthUv / 2) &&
+        positionUV.y <= wallHeightUv)
+    {
+        color = wallColor;
+    }
+    else if( // Dach
+        distFromYAxisUv + (positionUV.y - wallHeightUv) * roofSlopeUv <= (roofWidthUv / 2) && 
+        positionUV.y >= wallHeightUv)
+    {
+        color = roofColor;
+    }
+    
+    result[id.xy] = float4(color,1);
+}
